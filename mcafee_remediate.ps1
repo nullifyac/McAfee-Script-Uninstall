@@ -101,9 +101,9 @@ if (-not (Test-Path $DebloatFolder)) {
 }
 
 # Adjust URLs if needed:
-$ServiceUIUrl       = "https://github.com/alexpsp00/McAfee_Removal/raw/refs/heads/main/ServiceUI.exe"
-$McAfeeCleanZipUrl  = "https://github.com/alexpsp00/McAfee_Removal/raw/refs/heads/main/mcafeeclean.zip"
-$McCleanupZipUrl    = "https://github.com/alexpsp00/McAfee_Removal/raw/refs/heads/main/mccleanup.zip"
+$ServiceUIUrl       = "https://github.com/nullifyac/McAfee_Removal/raw/refs/heads/main/ServiceUI.exe"
+$McAfeeCleanZipUrl  = "https://github.com/nullifyac/McAfee_Removal/raw/refs/heads/main/mcafeeclean.zip"
+$McCleanupZipUrl    = "https://github.com/nullifyac/McAfee_Removal/raw/refs/heads/main/mccleanup.zip"
 
 # Local file paths
 $ServiceUIExe       = Join-Path $DebloatFolder "ServiceUI.exe"
@@ -132,16 +132,14 @@ function Get-LocalFileIfMissing {
     }
 }
 
-#
 # Download these files only now that we KNOW McAfee is present
-#
+
 Get-LocalFileIfMissing -Url $ServiceUIUrl      -LocalPath $ServiceUIExe       -Description "ServiceUI.exe"
 Get-LocalFileIfMissing -Url $McAfeeCleanZipUrl -LocalPath $McAfeeCleanZipPath -Description "mcafeeclean.zip"
 Get-LocalFileIfMissing -Url $McCleanupZipUrl   -LocalPath $McCleanupZipPath   -Description "mccleanup.zip"
 
-#
 # 2) Cleanup tool function
-#
+
 function Start-McAfeeCleanupTool {
     param(
         [string]$ZipPath,
@@ -182,9 +180,8 @@ $ExtractFolder2 = Join-Path $DebloatFolder "mccleanup_extracted"
 Start-McAfeeCleanupTool -ZipPath $McAfeeCleanZipPath -ExtractFolder $ExtractFolder1 -ToolName "mcafeeclean"
 Start-McAfeeCleanupTool -ZipPath $McCleanupZipPath   -ExtractFolder $ExtractFolder2 -ToolName "mccleanup"
 
-#
 # 3) Uninstall leftover via registry
-#
+
 Write-Log "Uninstalling leftover McAfee items from registry..."
 $regPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
@@ -224,9 +221,8 @@ foreach ($rp in $regPaths) {
     }
 }
 
-#
 # 4) Remove McAfee Safe Connect
-#
+
 Write-Log "Checking for McAfee Safe Connect..."
 $safeConnects = @()
 foreach ($rp in $regPaths) {
@@ -244,9 +240,8 @@ foreach ($sc in $safeConnects) {
     }
 }
 
-#
 # 5) Remove leftover Start Menu, registry keys, directories
-#
+
 Write-Log "Removing McAfee Start Menu folder if present..."
 $startMenuPath = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\McAfee"
 if (Test-Path $startMenuPath) {
@@ -308,9 +303,8 @@ foreach ($dir in $mcAfeeDirs) {
     }
 }
 
-#
 # 6) Remove temporary folders & ZIPs
-#
+
 Write-Log "Removing extracted folders & ZIP files..."
 $ExtractFolder1 = Join-Path $DebloatFolder "mcafeeclean_extracted"
 $ExtractFolder2 = Join-Path $DebloatFolder "mccleanup_extracted"
@@ -329,9 +323,8 @@ foreach ($zipFile in @($McAfeeCleanZipPath, $McCleanupZipPath)) {
     }
 }
 
-#
 # 7) Final detection => if still present => show indefinite prompt or forced reboot
-#
+
 Write-Log "Final detection check..."
 if (-not (Test-McAfeePresence)) {
     Write-Log "No McAfee remnants found. Exiting with code 0."
