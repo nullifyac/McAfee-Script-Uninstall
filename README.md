@@ -94,7 +94,7 @@ Example Flows
 1. **No McAfee Found**  
    - Detection script exits 0; no remediation is triggered.
 
-2. **McAfee Found, No User Logged On**  
+2. **McAfee Found**  
    - Detection script exits 1.
    - Remediation script removes McAfee and schedules a reboot at midnight.
 
