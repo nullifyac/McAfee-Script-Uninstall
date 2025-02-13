@@ -5,18 +5,6 @@ $ErrorActionPreference = "SilentlyContinue"
 
 Write-Host "=== McAfee Detection Script ==="
 
-# 1) First, check if QcShm.exe is running.
-#    If it is, that indicates the McAfee cleanup has run successfully,
-#    but a reboot is needed to fully clear all traces.
-$qcShmProcess = Get-Process -Name "QcShm" -ErrorAction SilentlyContinue
-if ($qcShmProcess) {
-    Write-Host "QcShm.exe is running. Uninstall was successful, pending reboot to remove remaining traces."
-    exit 0
-}
-
-# 2) If QcShm.exe is not running, check the registry and file system.
-$foundMcAfee = $false
-
 # Registry paths to look for McAfee references
 $regPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
