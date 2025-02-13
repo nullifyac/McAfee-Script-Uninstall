@@ -1,7 +1,7 @@
 McAfee Removal Script
 ======================
 
-This repository contains PowerShell scripts and supporting files to detect, remove, and optionally prompt for a reboot when uninstalling McAfee products in a Windows environment. These are designed primarily for use with Microsoft Intune or SCCM, but they can be adapted to other deployment tools.
+This repository contains PowerShell scripts and supporting files to detect, remove, and optionally schedule a reboot when uninstalling McAfee products in a Windows environment. These scripts are designed primarily for use with Microsoft Intune or SCCM, but they can be adapted to other deployment tools.
 
 Contents
 --------
@@ -16,14 +16,14 @@ Contents
   The remediation (uninstall) script that:
   1. Checks if McAfee is present (if not, it skips further actions).
   2. If present, downloads and runs the cleanup tools (*mcafeeclean.zip*, *mccleanup.zip*) and removes leftover McAfee registry entries, folders, etc.
-  3. Displays an indefinite “Snooze or Restart” pop-up if a reboot is needed (requires *ServiceUI.exe* when running as SYSTEM).
-  4. If no user is logged on (or *ServiceUI.exe* is missing), forces a reboot by default.
+  3. **Reboot Logic:**  
+     - After cleanup, if any residual McAfee files remain (for example, a few files locked by the QcShm.exe process), the script schedules a reboot at local midnight.
+     - The script calculates the time remaining until midnight (based on the local machine’s time) and uses `shutdown.exe` with that delay to schedule the reboot.
+     - If no residual files are found (or if McAfee is completely removed), the script exits normally without scheduling a reboot.
+  4. If remnants remain beyond the acceptable threshold (indicating McAfee is still installed), the script exits with code **1** so that remediation will be re‑attempted.
 
 - **mcafeeclean.zip**, **mccleanup.zip**  
   ZIP files containing McAfee cleanup tools (each includes *Mccleanup.exe*) for removing various McAfee components.
-
-- **ServiceUI.exe**  
-  A small executable (from Microsoft Deployment Toolkit) that allows a SYSTEM process to display an interactive window on the logged-on user’s desktop, enabling the indefinite “Yes=Restart / No=Snooze 5 minutes” prompt for non-admin users.
 
 How It Works
 ------------
@@ -31,16 +31,23 @@ How It Works
 1. **Detection**  
    - In Intune or SCCM, run **mcafee_detect.ps1**.  
    - If it exits **1**, McAfee is present; if it exits **0**, McAfee is not present.  
-   - If only *QcShm.exe* remains, the script considers McAfee uninstalled (exit 0) but notes a reboot is needed.
+   - If only QcShm.exe remains, the script considers McAfee uninstalled (exit 0) but notes a reboot is needed.
 
 2. **Remediation / Removal**  
    - When McAfee is present, run **mcafee_remediate.ps1**:
      1. (Optionally) checks if McAfee is installed.
-     2. Downloads *mcafeeclean.zip*, *mccleanup.zip*, and *ServiceUI.exe* if needed.
+     2. Downloads *mcafeeclean.zip*, *mccleanup.zip* if needed.
      3. Extracts and runs the McAfee cleanup executables.
      4. Cleans up leftover registry keys, folders, etc.
-     5. If remnants remain needing a reboot, displays an indefinite “Yes=Restart / No=Snooze 5 minutes” prompt via *ServiceUI.exe*.
-        - If no user is logged on, a forced reboot occurs automatically.
+     5. **Reboot Scheduling:**  
+        - After cleanup, the script re‑checks the system.
+        - If only residual files remain (e.g. a few locked files by QcShm.exe), it calculates how many seconds remain until local midnight and then schedules a reboot using:
+          ```
+          shutdown.exe /r /t <seconds>
+          ```
+          This ensures the system reboots at midnight.
+        - If no user is present or if residual files are detected, the reboot is automatically scheduled without further user interaction.
+     6. If significant remnants still exist after remediation, the script exits with **1** so that remediation is re‑attempted by your deployment system.
 
 Deployment Scenarios
 --------------------
@@ -52,57 +59,48 @@ Deployment Scenarios
 - Both run under SYSTEM by default:
   - If mcafee_detect.ps1 exits 1, Intune triggers mcafee_remediate.ps1.
 - Reboot logic:
-  - If a user is logged on, *ServiceUI.exe* displays the indefinite snooze/restart prompt.
-  - Otherwise, the script forces a reboot.
+  - If residual files are detected (e.g. due to QcShm.exe locking a few files), the script schedules a reboot at local midnight.
 
 **SCCM (Configuration Manager)**
 
 - Use **mcafee_detect.ps1** as the application/package detection method:
   - Exit code 0 => not installed, 1 => installed.
 - Use **mcafee_remediate.ps1** as the uninstall program in the SCCM deployment.
-- SCCM can handle device reboots, or let the script force a reboot.
+- SCCM can handle device reboots, or let the script schedule a reboot at midnight.
 
 Files
 -----
 
-| File              | Description                                                                                                                           |
-|-------------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| mcafee_detect.ps1 | Checks registry + known McAfee folders. Exits 1 if found, 0 if not. If only QcShm.exe remains, exits 0 while noting a reboot is needed. |
-| mcafee_remediate.ps1 | Full removal script (runs as SYSTEM) that downloads mcafeeclean.zip, mccleanup.zip, ServiceUI.exe, cleans up McAfee, and prompts for reboot. |
-| mcafeeclean.zip   | McAfee cleanup tool #1 (includes Mccleanup.exe).                                                                                     |
-| mccleanup.zip     | McAfee cleanup tool #2 (includes Mccleanup.exe).                                                                                     |
-| ServiceUI.exe     | Utility that displays a user prompt from a SYSTEM context, allowing indefinite “snooze or restart.”                                  |
+| File                 | Description                                                                                                                                    |
+|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| mcafee_detect.ps1    | Checks registry and known McAfee folders. Exits 1 if McAfee is found, 0 if not. Logs if residual files exist that require a reboot.          |
+| mcafee_remediate.ps1 | Full removal script (runs as SYSTEM) that downloads mcafeeclean.zip and mccleanup.zip, cleans up McAfee, and schedules a reboot if needed.    |
+| mcafeeclean.zip      | McAfee cleanup tool #1 (includes Mccleanup.exe).                                                                                               |
+| mccleanup.zip        | McAfee cleanup tool #2 (includes Mccleanup.exe).                                                                                               |
 
 Notes & Tips
 ------------
 
 1. **User vs. SYSTEM Context**  
-   - SCCM/Intune typically run scripts as SYSTEM. *ServiceUI.exe* is used to inject a prompt into the user’s session.
-
-2. **Licensing**  
-   - *ServiceUI.exe* is from Microsoft Deployment Toolkit (MDT). Only this single .exe is needed. Check MDT’s licensing terms for usage.
-
-3. **QcShm.exe**  
-   - If QcShm.exe remains in memory, a reboot is needed. The detection script logs this but still exits 0, treating McAfee as uninstalled.
-   - QcShm.exe is from the "cleaning" process of the uninstall and residual files/traces may be left on the system until its rebooted.
-
-4. **Troubleshooting**  
-   - Check `C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\RemoveMcAfee.log` (Intune) or SCCM logs for script output.
-   - If the indefinite prompt never appears, ensure a user is logged on, *ServiceUI.exe* is present, and your environment allows interactive dialogs from SYSTEM.
+   - Intune/SCCM typically run scripts as SYSTEM.
+2. **QcShm.exe**  
+   - If QcShm.exe remains in memory, a reboot is required to clear locked residual files. The detection script logs this scenario and treats McAfee as uninstalled (exit 0) even though a reboot is scheduled.
+3. **Troubleshooting**  
+   - Check C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\RemoveMcAfee.log (or SCCM logs) for detailed script output and status.
 
 Example Flows
 -------------
 
 1. **No McAfee Found**  
-   - Detection script exits 0; no remediation triggered.
+   - Detection script exits 0; no remediation is triggered.
 
 2. **McAfee Found, No User Logged On**  
    - Detection script exits 1.
-   - Remediation script removes McAfee, finds no user => forced reboot.
+   - Remediation script removes McAfee and schedules a reboot at midnight.
 
-3. **McAfee Found, User Logged On**  
+3. **McAfee Found, Residual Files Remain**  
    - Detection script exits 1.
-   - Remediation script removes McAfee, sees leftover references => uses *ServiceUI.exe* => user sees indefinite “Yes=Restart / No=Snooze 5 minutes” prompt.
+   - Remediation script removes McAfee, detects residual locked files, and schedules a reboot at local midnight.
 
 Contributors
 ------------
