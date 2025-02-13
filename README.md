@@ -35,8 +35,8 @@ How It Works
 
 2. **Remediation / Removal**  
    - When McAfee is present, run **mcafee_remediate.ps1**:
-     1. (Optionally) checks if McAfee is installed.
-     2. Downloads *mcafeeclean.zip*, *mccleanup.zip* if needed.
+     1. checks if McAfee is installed.
+     2. Downloads *mcafeeclean.zip*, *mccleanup.zip*.
      3. Extracts and runs the McAfee cleanup executables.
      4. Cleans up leftover registry keys, folders, etc.
      5. **Reboot Scheduling:**  
@@ -46,8 +46,8 @@ How It Works
           shutdown.exe /r /t <seconds>
           ```
           This ensures the system reboots at midnight.
-        - If no user is present or if residual files are detected, the reboot is automatically scheduled without further user interaction.
-     6. If significant remnants still exist after remediation, the script exits with **1** so that remediation is re‑attempted by your deployment system.
+        - The reboot is automatically scheduled without further user interaction.
+     6. If significant remnants still exist after remediation, the script exits with **1** so that remediation is re‑attempted.
 
 Deployment Scenarios
 --------------------
@@ -73,8 +73,8 @@ Files
 
 | File                 | Description                                                                                                                                    |
 |----------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| mcafee_detect.ps1    | Checks registry and known McAfee folders. Exits 1 if McAfee is found, 0 if not. Logs if residual files exist that require a reboot.          |
-| mcafee_remediate.ps1 | Full removal script (runs as SYSTEM) that downloads mcafeeclean.zip and mccleanup.zip, cleans up McAfee, and schedules a reboot if needed.    |
+| mcafee_detect.ps1    | Checks registry and known McAfee folders. Exits 1 if McAfee is found, 0 if not.                                                                |
+| mcafee_remediate.ps1 | Full removal script (runs as SYSTEM) that downloads mcafeeclean.zip and mccleanup.zip, cleans up McAfee, and schedules a reboot if needed.     |
 | mcafeeclean.zip      | McAfee cleanup tool #1 (includes Mccleanup.exe).                                                                                               |
 | mccleanup.zip        | McAfee cleanup tool #2 (includes Mccleanup.exe).                                                                                               |
 
@@ -82,9 +82,9 @@ Notes & Tips
 ------------
 
 1. **User vs. SYSTEM Context**  
-   - Intune/SCCM typically run scripts as SYSTEM.
+   - Script is made to run in the SYSTEM context.
 2. **QcShm.exe**  
-   - If QcShm.exe remains in memory, a reboot is required to clear locked residual files. The detection script logs this scenario and treats McAfee as uninstalled (exit 0) even though a reboot is scheduled.
+   - If QcShm.exe is running, a reboot is required to clear locked residual files. The detection script logs this scenario and treats McAfee as uninstalled (exit 0) even though a reboot is scheduled.
 3. **Troubleshooting**  
    - Check C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\RemoveMcAfee.log (or SCCM logs) for detailed script output and status.
 
