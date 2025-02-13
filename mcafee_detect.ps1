@@ -3,45 +3,82 @@ param()
 
 $ErrorActionPreference = "SilentlyContinue"
 
+$fileThreshold = 10
+
 Write-Host "=== McAfee Detection Script ==="
 
-# Registry paths to look for McAfee references
+$foundRegistry = $false
+$totalFiles = 0
+$directoryFileCounts = @{}
+
+# Registry Check
 $regPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
 )
-
-foreach ($path in $regPaths) {
-    if (Test-Path $path) {
-        Get-ChildItem -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
-            $dn = $_.GetValue("DisplayName")
-            if ($dn -and ($dn -like "*McAfee*")) {
-                Write-Host "Detected McAfee product in registry: $dn"
-                $foundMcAfee = $true
+foreach ($regPath in $regPaths) {
+    if (Test-Path $regPath) {
+        Get-ChildItem -Path $regPath -ErrorAction SilentlyContinue | ForEach-Object {
+            $displayName = $_.GetValue("DisplayName")
+            if ($displayName -and ($displayName -like "*McAfee*")) {
+                Write-Host "Detected registry entry: $displayName"
+                $foundRegistry = $true
             }
         }
     }
 }
 
-# File system paths where McAfee typically resides
+# Directory Check (with detailed output)
 $mcAfeeDirs = @(
     "C:\Program Files\McAfee",
     "C:\Program Files (x86)\McAfee",
     "C:\ProgramData\McAfee"
 )
-
 foreach ($dir in $mcAfeeDirs) {
     if (Test-Path $dir) {
-        Write-Host "Detected McAfee directory: $dir"
-        $foundMcAfee = $true
+        $files = Get-ChildItem -Path $dir -Recurse -File -ErrorAction SilentlyContinue
+        $fileCount = $files.Count
+        $directoryFileCounts[$dir] = $fileCount
+        Write-Host "Directory found: $dir - File count: $fileCount"
+        $totalFiles += $fileCount
+    }
+    else {
+        Write-Host "Directory not found: $dir"
     }
 }
+Write-Host "Total leftover McAfee files: $totalFiles"
 
-if ($foundMcAfee) {
-    Write-Host "McAfee is still present. Exiting detection with code 1."
-    exit 1
+# Check for QcShm.exe process
+$qcshmRunning = $null -ne (Get-Process -Name "QcShm" -ErrorAction SilentlyContinue)
+if ($qcshmRunning) {
+    Write-Host "QcShm.exe is running."
 }
 else {
-    Write-Host "No McAfee detected. Exiting with code 0."
+    Write-Host "QcShm.exe is not running."
+}
+
+# Determine Final State
+if ($foundRegistry -or ($totalFiles -gt $fileThreshold)) {
+    Write-Host "McAfee appears to be still installed (registry traces found or file count exceeds threshold)."
+    Write-Host "Exit Code 1"
+    exit 1
+}
+elseif (($totalFiles -gt 0) -and ($totalFiles -le $fileThreshold)) {
+    if ($qcshmRunning) {
+        Write-Host "Residual McAfee files detected ($totalFiles files) and QcShm.exe is running."
+        Write-Host "McAfee appears to be uninstalled, but a reboot is required to clear file locks."
+        Write-Host "Exit Code 0"
+        exit 0
+    }
+    else {
+        Write-Host "Residual McAfee files detected ($totalFiles files), but no file-locking process found."
+        Write-Host "McAfee appears to be uninstalled."
+        Write-Host "Exit Code 0"
+        exit 0
+    }
+}
+else {
+    Write-Host "No McAfee detected."
+    Write-Host "Exit Code 0"
     exit 0
 }
