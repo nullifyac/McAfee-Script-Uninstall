@@ -222,11 +222,26 @@ Start-McAfeeCleanupTool -ZipPath $McAfeeCleanZipPath -ExtractFolder $ExtractFold
 Start-McAfeeCleanupTool -ZipPath $McCleanupZipPath   -ExtractFolder $ExtractFolder2 -ToolName "mccleanup"
 
 ### Uninstall Leftover Registry Items ###
-Write-Log "Uninstalling leftover McAfee items from registry..." "INFO"
+Write-Log "Looking for Hostage Popup Installation and Uninstalling leftover McAfee items from registry..." "INFO"
 $regPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
 )
+# Define uninstall path for McAfee Security Scan
+$mcAfeeUninstaller = "C:\Program Files (x86)\McAfee Security Scan\uninstall.exe"
+# Check if the McAfee Security Scan uninstaller exists, then execute silently
+if (Test-Path $mcAfeeUninstaller) {
+# Stop McAfee background processes before uninstalling
+$processes = @("SSScheduler", "mc-webview-cnt")
+foreach ($proc in $processes) {
+    Get-Process -Name $proc -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+Write-Log "Attempting silent uninstall of McAfee Security Scan Plus..." "INFO"
+    Start-Process -FilePath $mcAfeeUninstaller -ArgumentList "/S", "/inner" -NoNewWindow -Wait
+    Write-Log "McAfee Security Scan Plus uninstallation completed." "INFO"
+} else {
+    Write-Log "Uninstaller not found at expected location: $mcAfeeUninstaller" "INFO"
+}
 foreach ($rp in $regPaths) {
     if (Test-Path $rp) {
         $apps = Get-ChildItem $rp -ErrorAction SilentlyContinue |
