@@ -16,14 +16,15 @@ $regPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
 )
-foreach ($regPath in $regPaths) {
-    if (Test-Path $regPath) {
-        Get-ChildItem -Path $regPath -ErrorAction SilentlyContinue | ForEach-Object {
-            $displayName = $_.GetValue("DisplayName")
-            if ($displayName -and ($displayName -like "*McAfee*")) {
-                Write-Host "Detected registry entry: $displayName"
-                $foundRegistry = $true
-            }
+foreach ($rp in $regPaths) {
+    if (Test-Path $rp) {
+        $matches = Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue | Where-Object { 
+            $_.DisplayName -like "*McAfee*"
+        }
+        
+        foreach ($match in $matches) {
+            Write-Host "Detected registry entry: $($match.DisplayName)"
+            $foundRegistry = $true
         }
     }
 }
