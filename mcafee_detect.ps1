@@ -24,6 +24,7 @@ foreach ($rp in $regPaths) {
         
         foreach ($match in $matches) {
             Write-Host "Detected registry entry: $($match.DisplayName)"
+            $foundRegistry = $true
         }
     }
 }
