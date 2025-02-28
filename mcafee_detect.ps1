@@ -18,16 +18,17 @@ $regPaths = @(
 )
 foreach ($rp in $regPaths) {
     if (Test-Path $rp) {
-        $matches = Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue | Where-Object { 
+        $mcAfeeMatches = Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue | Where-Object { 
             $_.DisplayName -like "*McAfee*"
         }
         
-        foreach ($match in $matches) {
+        foreach ($match in $mcAfeeMatches) {
             Write-Host "Detected registry entry: $($match.DisplayName)"
             $foundRegistry = $true
         }
     }
 }
+
 
 # Directory Check (with detailed output)
 $mcAfeeDirs = @(
