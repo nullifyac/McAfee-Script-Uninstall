@@ -7,6 +7,70 @@ $fileThreshold = 10
 
 Write-Host "=== McAfee Detection Script ==="
 
+$debloatFolder = "C:\ProgramData\Debloat"
+$rebootMarkerPath = Join-Path $debloatFolder "McAfeeRemoval.reboot.json"
+
+function Get-LastBootUtc {
+    try {
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+        if ($os -and $os.LastBootUpTime) {
+            return ([datetime]$os.LastBootUpTime).ToUniversalTime()
+        }
+    }
+    catch {}
+    return $null
+}
+
+function Get-RebootMarker {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) { return $null }
+
+    try {
+        $raw = Get-Content -Path $Path -Raw -ErrorAction SilentlyContinue
+        if (-not $raw) { return $null }
+        return ($raw | ConvertFrom-Json -ErrorAction SilentlyContinue)
+    }
+    catch {
+        return $null
+    }
+}
+
+function Clear-RebootMarker {
+    param([string]$Path)
+
+    try {
+        if (Test-Path $Path) {
+            Remove-Item -Path $Path -Force -ErrorAction SilentlyContinue
+        }
+    }
+    catch {}
+}
+
+# If remediation scheduled a reboot, treat as temporarily compliant so HealthScripts does not mark the run as failed.
+# Once the device actually reboots, remove the marker and resume normal detection.
+$marker = Get-RebootMarker -Path $rebootMarkerPath
+if ($marker -and $marker.CreatedUtc) {
+    $markerUtc = $null
+    try { $markerUtc = [datetime]::Parse($marker.CreatedUtc).ToUniversalTime() } catch {}
+
+    $bootUtc = Get-LastBootUtc
+    if ($bootUtc -and $markerUtc -and ($bootUtc -gt $markerUtc)) {
+        Write-Host "Reboot marker exists, but device has rebooted since it was set. Clearing marker and continuing detection."
+        Clear-RebootMarker -Path $rebootMarkerPath
+    }
+    else {
+        # Safety: do not ignore forever if reboot never happens.
+        if ($markerUtc -and (([datetime]::UtcNow - $markerUtc).TotalHours -ge 48)) {
+            Write-Host "Reboot marker is older than 48 hours. Treating as non-compliant to re-trigger remediation."
+            exit 1
+        }
+
+        Write-Host "Reboot required/pending (marker present). Treating as compliant until reboot occurs."
+        exit 0
+    }
+}
+
 $foundRegistry = $false
 $totalFiles = 0
 $directoryFileCounts = @{}
